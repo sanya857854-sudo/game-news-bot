@@ -1,0 +1,10 @@
+# Запуск в Docker:  docker compose up -d --build
+services:
+  gamebot:
+    build: .
+    restart: always
+    env_file: .env
+    volumes:
+      - ./data:/app/data      # память бота (что уже опубликовано)
+      - ./logs:/app/logs
+      - ./feeds.txt:/app/feeds.txt

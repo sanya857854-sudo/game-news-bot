@@ -1,0 +1,20 @@
+# RSS-ленты, из которых бот берёт новости.
+# Формат строки:   язык | название | адрес ленты
+# Строки, начинающиеся с #, бот игнорирует. Чтобы отключить ленту — поставьте # в начале строки.
+#
+# ВАЖНО: адреса лент иногда меняются. Проверить все ленты можно командой:  python main.py --check
+# Если какая-то лента «не открылась» — найдите её актуальный адрес на сайте (ищите значок RSS)
+# или просто отключите. Остальные продолжат работать.
+#
+# Русскоязычные ленты работают сразу:
+ru | StopGame | https://rss.stopgame.ru/rss_news.xml
+ru | 3DNews Игры | https://3dnews.ru/games/rss/
+ru | Игромания | https://www.igromania.ru/rss/rss_news.xml
+ru | Playground | https://www.playground.ru/rss/news.xml
+
+# Англоязычные ленты: бот возьмёт их, только если в .env настроен ИИ-перевод (AI_BASE_URL, AI_API_KEY, AI_MODEL).
+# Уберите # в начале нужных строк.
+# en | PC Gamer | https://www.pcgamer.com/rss/
+# en | Rock Paper Shotgun | https://www.rockpapershotgun.com/feed
+# en | Eurogamer | https://www.eurogamer.net/feed
+# en | GamesRadar | https://www.gamesradar.com/rss/

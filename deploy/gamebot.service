@@ -1,0 +1,20 @@
+# Служба systemd: запускает бота при старте сервера и перезапускает, если он упал.
+# Замените ВАШ_ПОЛЬЗОВАТЕЛЬ на имя пользователя на сервере (команда whoami).
+# Путь /home/ВАШ_ПОЛЬЗОВАТЕЛЬ/game-news-bot — туда, где лежит проект.
+
+[Unit]
+Description=Game news Telegram bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ВАШ_ПОЛЬЗОВАТЕЛЬ
+WorkingDirectory=/home/ВАШ_ПОЛЬЗОВАТЕЛЬ/game-news-bot
+ExecStart=/home/ВАШ_ПОЛЬЗОВАТЕЛЬ/game-news-bot/venv/bin/python main.py
+Restart=always
+RestartSec=15
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
