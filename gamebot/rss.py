@@ -197,6 +197,13 @@ def list_candidates(cfg: Config, storage: Storage) -> List[Candidate]:
                 continue
             freshness = max(0.0, 1.0 - age / max_age)
             title = formatting.clean_text(entry["title"])
+
+            # Пропуск неигрового мусора (косплей, кино, железо)
+            title_low = title.lower()
+            if any(kw in title_low for kw in cfg.rss_exclude_keywords):
+                log.debug("Пропуск неигровой темы в RSS: %s", title)
+                continue
+
             candidates.append(
                 Candidate(
                     key=key,
@@ -242,4 +249,6 @@ def build_post(cfg: Config, feed: Feed, entry: Dict) -> Optional[Post]:
         photos=[image] if image else [],
         trailer_url=trailer_url,
         link=entry["link"],
+        button_text=f"📖 Читать полностью ({source_name})",
+        button_url=entry["link"],
     )

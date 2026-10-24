@@ -66,6 +66,18 @@ def fetch_details(appid: int, cfg: Config) -> Optional[dict]:
     return data
 
 
+def fetch_player_count(appid: int) -> Optional[int]:
+    """Получает текущее число игроков онлайн в Steam."""
+    try:
+        url = "https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/"
+        resp = net.get(url, params={"appid": appid}, timeout=10, retries=1)
+        data = resp.json().get("response") or {}
+        cnt = data.get("player_count")
+        return int(cnt) if cnt is not None else None
+    except Exception:
+        return None
+
+
 def fetch_prices(appid: int, regions: List[str], field: str = "final") -> List[str]:
     """Цены по регионам: ['1300₽', '8360₸', ...]. field='initial' — цена без скидки."""
     prices: List[str] = []
@@ -262,6 +274,23 @@ def build_post(cfg: Config, appid: int, kind: str, ctx: dict) -> Optional[Post]:
 
     video_url, hls_url = _pick_trailer(details.get("movies") or []) if cfg.send_trailers else (None, None)
 
+    # Оценки, рекомендации и онлайн
+    meta = details.get("metacritic") or {}
+    metacritic_score = meta.get("score") if isinstance(meta, dict) else None
+    recs = details.get("recommendations") or {}
+    recommendations_count = recs.get("total") if isinstance(recs, dict) else None
+    player_count = fetch_player_count(appid) if kind in ("release", "discount") else None
+
+    # Интерактивный опрос для релизов и скидок
+    poll_question = None
+    poll_options = []
+    if kind == "release":
+        poll_question = f"Будете играть в {name}?"
+        poll_options = ["🔥 Уже играю / куплю", "👀 Подожду скидок / отзывов", "❌ Мимо / не моё"]
+    elif kind == "discount" and ctx.get("pct", 0) >= 50:
+        poll_question = f"Стоит ли брать {name} со скидкой {ctx.get('pct')}%?"
+        poll_options = ["👍 Однозначно брать!", "🤔 На любителя", "👎 Не стоит брать"]
+
     store_url = STORE_APP_URL.format(appid)
     text = formatting.steam_post_text(
         cfg,
@@ -274,6 +303,9 @@ def build_post(cfg: Config, appid: int, kind: str, ctx: dict) -> Optional[Post]:
         discount=ctx.get("pct", 0),
         free_to_play=free_to_play,
         store_url=store_url,
+        metacritic_score=metacritic_score,
+        recommendations=recommendations_count,
+        player_count=player_count,
     )
     return Post(
         text=text,
@@ -282,4 +314,8 @@ def build_post(cfg: Config, appid: int, kind: str, ctx: dict) -> Optional[Post]:
         hls_url=hls_url,
         trailer_query=name,
         link=store_url,
+        button_text="🎮 Открыть страницу в Steam",
+        button_url=store_url,
+        poll_question=poll_question,
+        poll_options=poll_options,
     )

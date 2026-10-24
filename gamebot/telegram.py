@@ -25,6 +25,21 @@ def url_button_markup(text: str, url: str) -> str:
     return json.dumps({"inline_keyboard": [[{"text": text, "url": url}]]})
 
 
+def dual_button_markup(
+    primary_text: str,
+    primary_url: str,
+    sub_text: Optional[str] = None,
+    sub_url: Optional[str] = None,
+) -> str:
+    """Клавиатура из двух кнопок: целевое действие (Открыть/Забрать) и Подписаться."""
+    keyboard = []
+    if primary_text and primary_url:
+        keyboard.append([{"text": primary_text, "url": primary_url}])
+    if sub_text and sub_url:
+        keyboard.append([{"text": sub_text, "url": sub_url}])
+    return json.dumps({"inline_keyboard": keyboard})
+
+
 class TelegramError(Exception):
     def __init__(self, message: str, code: Optional[int] = None):
         super().__init__(message)
@@ -188,3 +203,20 @@ class Telegram:
         if reply_markup:
             data["reply_markup"] = reply_markup
         return self.call("sendMediaGroup", data=data, files=files, timeout=(15, 300))
+
+    def send_poll(
+        self,
+        question: str,
+        options: List[str],
+        is_anonymous: bool = True,
+        allows_multiple_answers: bool = False,
+    ) -> dict:
+        """Отправляет интерактивный опрос в канал."""
+        data = {
+            "chat_id": self.chat_id,
+            "question": question[:300],
+            "options": json.dumps(options[:10]),
+            "is_anonymous": is_anonymous,
+            "allows_multiple_answers": allows_multiple_answers,
+        }
+        return self.call("sendPoll", data=data)

@@ -1,3 +1,14 @@
+---
+title: Game News Bot
+emoji: 🎮
+colorFrom: blue
+colorTo: indigo
+sdk: gradio
+sdk_version: 4.44.0
+app_file: app.py
+pinned: false
+---
+
 # Бот игровых новостей для Telegram-канала
 
 Бот сам находит свежие игровые новости, оформляет пост и публикует его в вашем канале по расписанию. Вам ничего не нужно присылать вручную.

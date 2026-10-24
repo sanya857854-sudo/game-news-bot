@@ -92,6 +92,7 @@ class Config:
     use_emoji: bool
     show_source_link: bool
     show_steam_link: bool
+    enable_hashtags: bool
 
     # --- рост канала ---
     subscribe_button: bool
@@ -113,6 +114,7 @@ class Config:
     enable_rss: bool
     feeds_file: Path
     rss_max_age_hours: int
+    rss_exclude_keywords: List[str]
 
     # --- Steam ---
     steam_list_cc: str
@@ -150,7 +152,6 @@ def load_config(require_telegram: bool = True) -> Config:
         if not channel:
             raise ConfigError("Не заполнен TELEGRAM_CHANNEL_ID в файле .env (например @my_channel).")
 
-    # Подпись под постом: по умолчанию — @имя канала, если он публичный.
     raw_signature = os.getenv("CHANNEL_SIGNATURE")
     if raw_signature is None:
         signature = channel if channel.startswith("@") else ""
@@ -188,6 +189,7 @@ def load_config(require_telegram: bool = True) -> Config:
         use_emoji=_bool("USE_EMOJI", True),
         show_source_link=_bool("SHOW_SOURCE_LINK", True),
         show_steam_link=_bool("SHOW_STEAM_LINK", True),
+        enable_hashtags=_bool("ENABLE_HASHTAGS", True),
         subscribe_button=_bool("SUBSCRIBE_BUTTON", True),
         subscribe_button_text=_get("SUBSCRIBE_BUTTON_TEXT", "📣 Подписаться на канал"),
         track_joins=_bool("TRACK_JOINS", True),
@@ -201,6 +203,10 @@ def load_config(require_telegram: bool = True) -> Config:
         enable_rss=_bool("ENABLE_RSS", True),
         feeds_file=path("FEEDS_FILE", "feeds.txt"),
         rss_max_age_hours=_int("RSS_MAX_AGE_HOURS", 36, minimum=1),
+        rss_exclude_keywords=_list(
+            "RSS_EXCLUDE_KEYWORDS",
+            "косплей,cosplay,сериал,фильм,кино,netflix,комикс,фигурка,видеокарта,процессор,железо",
+        ),
         steam_list_cc=_get("STEAM_LIST_CC", "us").lower(),
         steam_lang=_get("STEAM_LANG", "russian").lower(),
         steam_kinds=_list("STEAM_KINDS", "release,free,discount,upcoming"),
@@ -209,8 +215,8 @@ def load_config(require_telegram: bool = True) -> Config:
         release_max_age_days=_int("RELEASE_MAX_AGE_DAYS", 10, minimum=1),
         skip_adult=_bool("SKIP_ADULT", True),
         max_screenshots=_int("MAX_SCREENSHOTS", 2, minimum=0),
-        send_trailers=_bool("SEND_TRAILERS", True),
-        use_ffmpeg=_bool("USE_FFMPEG", True),
+        send_trailers=_bool("SEND_TRAILERS", False),
+        use_ffmpeg=_bool("USE_FFMPEG", False),
         max_video_seconds=_int("MAX_VIDEO_SECONDS", 150, minimum=10),
         ai_base_url=_get("AI_BASE_URL"),
         ai_api_key=_get("AI_API_KEY"),

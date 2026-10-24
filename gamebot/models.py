@@ -19,6 +19,10 @@ class Post:
     trailer_url: Optional[str] = None           # готовая ссылка на трейлер (например, YouTube)
     trailer_query: Optional[str] = None         # что искать на YouTube, если ключ задан
     link: Optional[str] = None                  # страница материала
+    button_text: Optional[str] = None           # текст инлайн-кнопки
+    button_url: Optional[str] = None            # ссылка для инлайн-кнопки
+    poll_question: Optional[str] = None         # вопрос для интерактивного опроса
+    poll_options: List[str] = field(default_factory=list)  # варианты ответа опроса
 
 
 @dataclass

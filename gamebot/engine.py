@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-from . import formatting, growth, hotness, publisher, rss, steam
+from . import formatting, giveaways, growth, hotness, publisher, rss, steam
 from .config import Config
 from .models import Candidate
 from .storage import Storage
@@ -42,24 +42,23 @@ class Bot:
         self.tz = ZoneInfo(cfg.timezone)
         self._stop = threading.Event()
         self._retry_at = 0.0
-        self._markup: Optional[str] = None
-        self._markup_ready = False
+        self._invite_url_val: Optional[str] = None
 
-    # ---------------------------------------------------------------- кнопка «Подписаться»
-    def _post_markup(self) -> Optional[str]:
+    # ---------------------------------------------------------------- ссылка «Подписаться»
+    def _invite_url(self) -> Optional[str]:
         """Ссылка-приглашение создаётся один раз; при сбое попробуем при следующем посте."""
-        if self._markup_ready:
-            return self._markup
-        url = growth.ensure_invite_link(self.cfg, self.tg, self.storage)
-        if url is None and self.cfg.subscribe_button:
-            return None
-        self._markup = growth.post_markup(self.cfg, url)
-        self._markup_ready = True
-        return self._markup
+        if self._invite_url_val is not None:
+            return self._invite_url_val
+        self._invite_url_val = growth.ensure_invite_link(self.cfg, self.tg, self.storage)
+        return self._invite_url_val
 
     # ---------------------------------------------------------------- сбор и выбор
     def collect(self) -> List[Candidate]:
         found: List[Candidate] = []
+        try:
+            found += giveaways.list_candidates(self.cfg, self.storage)
+        except Exception as exc:
+            log.warning("Раздачи сейчас недоступны: %s", exc)
         if self.cfg.enable_steam:
             try:
                 found += steam.list_candidates(self.cfg, self.storage)
@@ -95,13 +94,31 @@ class Bot:
             return False
 
         recent_news = self.storage.recent_titles(time.time() - 3 * 86400, kind="news")
+        recent_all = self.storage.recent_titles(time.time() - 60 * 86400)
+        blacklist_file = self.cfg.db_path.parent / "blacklist.txt"
+        blacklist = []
+        if blacklist_file.exists():
+            blacklist = [line.strip().lower() for line in blacklist_file.read_text(encoding="utf-8").splitlines() if line.strip() and not line.startswith("#")]
+
         attempts = 0
         network_failures = 0
         for cand in candidates:
             if attempts >= MAX_BUILD_ATTEMPTS or network_failures >= 3:
                 break
+
+            title_low = cand.title.lower()
+            if blacklist and any(b in title_low for b in blacklist):
+                log.info("Материал в черном списке, пропускаю: %s", cand.title)
+                self._mark(cand, "skipped")
+                continue
+
             if cand.kind == "news" and formatting.is_similar_to_any(cand.title, recent_news):
                 log.info("Похожая новость уже была, пропускаю: %s", cand.title)
+                self._mark(cand, "skipped")
+                continue
+
+            if cand.kind in ("release", "discount", "free", "upcoming") and formatting.is_similar_to_any(cand.title, recent_all, threshold=0.7):
+                log.info("Игра уже публиковалась в канале за последние 60 дней, пропускаю: %s", cand.title)
                 self._mark(cand, "skipped")
                 continue
 
@@ -127,7 +144,7 @@ class Bot:
                 return True
 
             try:
-                publisher.publish(self.cfg, self.tg, post, self._post_markup())
+                publisher.publish(self.cfg, self.tg, post, self._invite_url())
             except TelegramError as exc:
                 if exc.fatal:
                     log.error(
@@ -161,6 +178,8 @@ class Bot:
         print("Трейлер (mp4):", post.video_url or "нет")
         print("Трейлер (HLS, нужен ffmpeg):", post.hls_url or "нет")
         print("Ссылка на трейлер:", post.trailer_url or "нет")
+        print("Инлайн-кнопка:", f"[{post.button_text}] ➔ {post.button_url}" if post.button_text else "нет")
+        print("Интерактивный опрос:", f"«{post.poll_question}» -> {post.poll_options}" if post.poll_question else "нет")
         print("=" * 60 + "\n")
 
     # ---------------------------------------------------------------- расписание

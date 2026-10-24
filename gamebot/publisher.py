@@ -9,16 +9,29 @@ from typing import Callable, List, Optional, Tuple
 from . import formatting, media, youtube
 from .config import Config
 from .models import Post
-from .telegram import Telegram, TelegramError
+from .telegram import Telegram, TelegramError, dual_button_markup, url_button_markup
 
 log = logging.getLogger(__name__)
 
 
-def publish(cfg: Config, tg: Telegram, post: Post, markup: Optional[str] = None) -> str:
+def build_markup(cfg: Config, post: Post, invite_url: Optional[str] = None) -> Optional[str]:
+    """Формирует клавиатуру под постом: инлайн-кнопку действия и/или кнопку подписки."""
+    sub_text = cfg.subscribe_button_text if cfg.subscribe_button and invite_url else None
+    sub_url = invite_url if cfg.subscribe_button and invite_url else None
+    
+    if post.button_text and post.button_url:
+        return dual_button_markup(post.button_text, post.button_url, sub_text, sub_url)
+    elif sub_text and sub_url:
+        return url_button_markup(sub_text, sub_url)
+    return None
+
+
+def publish(cfg: Config, tg: Telegram, post: Post, invite_url: Optional[str] = None) -> str:
     """Отправляет пост. Возвращает, каким способом удалось (для лога).
 
-    markup — необязательная кнопка под постом (например, «Подписаться на канал»).
+    invite_url — ссылка-приглашение для кнопки «Подписаться на канал».
     """
+    markup = build_markup(cfg, post, invite_url)
     with tempfile.TemporaryDirectory(prefix="gamebot_") as tmp:
         photos: List[bytes] = []
         for url in post.photos:
@@ -56,6 +69,13 @@ def publish(cfg: Config, tg: Telegram, post: Post, markup: Optional[str] = None)
             try:
                 action()
                 log.info("Опубликовано: %s", label)
+                # Если у поста есть интерактивный опрос — публикуем его следом
+                if post.poll_question and post.poll_options:
+                    try:
+                        tg.send_poll(post.poll_question, post.poll_options)
+                        log.info("Опубликован интерактивный опрос: %s", post.poll_question)
+                    except Exception as poll_exc:
+                        log.warning("Не удалось отправить опрос: %s", poll_exc)
                 return label
             except TelegramError as exc:
                 if exc.fatal:

@@ -170,19 +170,61 @@ def title_emoji(cfg: Config, kind: str, title: str = "") -> str:
     return pick_emoji(cfg, kind, title)
 
 
-_ENGAGEMENT_QUESTIONS = [
-    "А вы будете играть?",
-    "Берём?",
-    "Как вам такое?",
-    "Что думаете?",
-]
+_ENGAGEMENT_QUESTIONS = {
+    "release": ["Будете играть?", "Ждали релиз?", "Попробуете новинку?", "Как вам игра?"],
+    "upcoming": ["Ждёте игру?", "Добавили в вишлист?", "Как вам анонс?", "Будете ждать релиз?"],
+    "free": ["Уже забрали в библиотеку?", "Успели забрать?", "Будете играть или на потом?"],
+    "discount": ["Берём по скидке?", "Как вам предложение?", "Стоит брать?"],
+    "news": ["Что думаете об этом?", "Как вам такие новости?", "Делитесь мнением в комментариях!"]
+}
+
+_THEME_HASHTAGS = (
+    (r"gta|grand theft auto", "#gta"),
+    (r"half-life|half life|valve", "#valve"),
+    (r"witcher|ведьмак", "#witcher"),
+    (r"cyberpunk|киберпанк", "#cyberpunk"),
+    (r"stalker|сталкер", "#stalker"),
+    (r"playstation|ps5|ps4|sony", "#playstation"),
+    (r"xbox|microsoft", "#xbox"),
+    (r"nintendo|switch", "#nintendo"),
+    (r"elden ring|fromsoftware|dark souls|bloodborne", "#souls"),
+    (r"resident evil", "#residentevil"),
+    (r"silent hill", "#silenthill"),
+    (r"fallout", "#fallout"),
+    (r"doom", "#doom"),
+    (r"space marine|warhammer", "#warhammer"),
+)
+
+_KIND_HASHTAGS = {
+    "release": ["#релиз", "#игры", "#steam"],
+    "upcoming": ["#анонс", "#скоро", "#steam"],
+    "free": ["#раздача", "#халява", "#steam"],
+    "discount": ["#скидки", "#распродажа", "#steam"],
+    "news": ["#новости", "#игры"],
+}
+
+
+def generate_hashtags(cfg: Config, kind: str, text_for_themes: str = "") -> str:
+    """Генерирует рубрикаторные хэштеги для навигации по каналу."""
+    if not getattr(cfg, "enable_hashtags", True):
+        return ""
+    tags = list(_KIND_HASHTAGS.get(kind, ["#игры"]))
+    low = text_for_themes.lower()
+    for pattern, tag in _THEME_HASHTAGS:
+        if tag not in tags and re.search(pattern, low):
+            tags.append(tag)
+            if len(tags) >= 5:
+                break
+    return " ".join(tags)
 
 
 def engagement_html(cfg: Config, kind: str) -> str:
-    """Вопрос читателям в конце поста — фирменная черта стиля «Платформа»."""
-    if _style(cfg) != "platforma" or not cfg.post_question or kind == "news":
+    """Вопрос читателям в конце поста — для вовлечения, реакций и комментариев."""
+    if not cfg.post_question:
         return ""
-    return esc(random.choice(_ENGAGEMENT_QUESTIONS))
+    # В стиле prepod оставляем только лаконичные вопросы
+    options = _ENGAGEMENT_QUESTIONS.get(kind, ["Что думаете?"])
+    return esc(random.choice(options))
 
 
 def _format_body(cfg: Config, body: str) -> str:
@@ -207,12 +249,17 @@ def _assemble(
     middle: Iterable[str],
     tail: Iterable[str],
     with_slot: bool,
+    hashtags: str = "",
 ) -> str:
     """Склеивает абзацы и следит, чтобы подпись влезла в лимит Telegram."""
     middle = [m for m in middle if m]
     tail = [t for t in tail if t]
     signature = signature_html(cfg)
-    fixed_parts = [title_line, *middle, *tail] + ([signature] if signature else [])
+    fixed_parts = [title_line, *middle, *tail]
+    if hashtags:
+        fixed_parts.append(hashtags)
+    if signature:
+        fixed_parts.append(signature)
     fixed_len = len("\n\n".join(fixed_parts)) + 2
     budget = CAPTION_LIMIT - fixed_len - (TRAILER_RESERVE if with_slot else 0)
 
@@ -230,6 +277,8 @@ def _assemble(
     paragraphs.extend(tail)
     if with_slot:
         paragraphs.append(TRAILER_SLOT)
+    if hashtags:
+        paragraphs.append(hashtags)
     if signature:
         paragraphs.append(signature)
     return "\n\n".join(paragraphs)
@@ -247,9 +296,12 @@ def steam_post_text(
     discount: int = 0,
     free_to_play: bool = False,
     store_url: Optional[str] = None,
+    metacritic_score: Optional[int] = None,
+    recommendations: Optional[int] = None,
+    player_count: Optional[int] = None,
 ) -> str:
     """Пост про игру из Steam. Структура как в образце:
-    жирный заголовок → короткое описание → строка с ценами → подпись канала."""
+    жирный заголовок → короткое описание → строка с ценами → оценки/онлайн → подпись канала."""
     n = esc(name)
     slash_prices = "/".join(prices)
     middle: List[str] = []
@@ -284,6 +336,16 @@ def steam_post_text(
         if prices:
             middle.append(f"{line_prefix(cfg)}Сейчас игра стоит {esc(slash_prices)}.")
 
+    # Дополнительная полезная статистика для игроков
+    if metacritic_score and metacritic_score > 0:
+        middle.append(f"{line_prefix(cfg)}🏆 Оценка Metacritic: <b>{metacritic_score}/100</b>")
+    if recommendations and recommendations >= 500:
+        rec_str = f"{recommendations:,}".replace(",", " ")
+        middle.append(f"{line_prefix(cfg)}👍 Рекомендаций игроков: <b>{rec_str}</b>")
+    if player_count and player_count >= 1000:
+        cnt_str = f"{player_count:,}".replace(",", " ")
+        middle.append(f"{line_prefix(cfg)}👥 Онлайн прямо сейчас: <b>{cnt_str}</b> игроков")
+
     title_line = f"{_prefix(cfg, title_emoji(cfg, kind))}<b>{title}</b>"
     tail = []
     if cfg.show_steam_link and store_url:
@@ -291,7 +353,8 @@ def steam_post_text(
     question = engagement_html(cfg, kind)
     if question:
         tail.append(question)
-    return _assemble(cfg, title_line, description, middle, tail, with_slot=True)
+    hashtags = generate_hashtags(cfg, kind, name)
+    return _assemble(cfg, title_line, description, middle, tail, with_slot=True, hashtags=hashtags)
 
 
 def news_post_text(
@@ -306,7 +369,11 @@ def news_post_text(
     tail = []
     if cfg.show_source_link and link:
         tail.append(f'{line_prefix(cfg)}<a href="{esc_attr(link)}">Источник: {esc(source_name)}</a>')
-    return _assemble(cfg, title_line, summary, [], tail, with_slot=with_slot)
+    question = engagement_html(cfg, "news")
+    if question:
+        tail.append(question)
+    hashtags = generate_hashtags(cfg, "news", f"{title} {summary}")
+    return _assemble(cfg, title_line, summary, [], tail, with_slot=with_slot, hashtags=hashtags)
 
 
 def fill_trailer_slot(text: str, trailer_line: str) -> str:
@@ -332,5 +399,5 @@ def is_similar(a: str, b: str, threshold: float = 0.6) -> bool:
     return len(ta & tb) / len(ta | tb) >= threshold
 
 
-def is_similar_to_any(title: str, others: Iterable[str]) -> bool:
-    return any(is_similar(title, other) for other in others)
+def is_similar_to_any(title: str, others: Iterable[str], threshold: float = 0.6) -> bool:
+    return any(is_similar(title, other, threshold=threshold) for other in others)

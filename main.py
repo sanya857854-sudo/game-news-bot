@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Точка входа.
+"""Точка входа игрового новостного бота для Telegram-канала @gameworld2029.
 
 Обычный запуск (работает постоянно):   python main.py
 Проверка настроек:                      python main.py --check
@@ -15,8 +15,48 @@ import logging
 import signal
 import sys
 from logging.handlers import RotatingFileHandler
+import os
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 from gamebot.config import ConfigError, load_config
+
+
+class _HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/html; charset=utf-8")
+        self.end_headers()
+        html = (
+            "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Game News Bot</title></head>"
+            "<body style='font-family:sans-serif;text-align:center;padding:60px;background:#0f172a;color:#f8fafc;'>"
+            "<h1 style='color:#38bdf8;'>🎮 Game News Telegram Bot</h1>"
+            "<p style='font-size:18px;color:#4ade80;'>🟢 Бот работает круглосуточно (24/7)</p>"
+            "<p style='color:#94a3b8;'>Канал: <a style='color:#38bdf8;' href='https://t.me/gameworld2029'>@gameworld2029</a></p>"
+            "</body></html>"
+        )
+        self.wfile.write(html.encode("utf-8"))
+
+    def log_message(self, format, *args):
+        pass
+
+
+def _start_health_server() -> None:
+    port = int(os.getenv("PORT", "7860"))
+    try:
+        server = HTTPServer(("0.0.0.0", port), _HealthHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        logging.getLogger().info("Веб-сервер статуса (Health Check) запущен на порту %d", port)
+    except Exception as exc:
+        logging.getLogger().debug("Фоновый веб-сервер не запущен: %s", exc)
 
 
 def setup_logging(level: str, log_dir) -> None:
@@ -30,7 +70,7 @@ def setup_logging(level: str, log_dir) -> None:
     file_handler = RotatingFileHandler(log_dir / "bot.log", maxBytes=1_000_000, backupCount=3, encoding="utf-8")
     file_handler.setFormatter(fmt)
     root.addHandler(file_handler)
-    logging.getLogger("urllib3").setLevel(logging.WARNING)  # не засорять лог
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 
 def main() -> int:
@@ -71,6 +111,7 @@ def main() -> int:
 
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, lambda *_: bot.request_stop())
+    _start_health_server()
     bot.run_forever()
     return 0
 

@@ -9,7 +9,7 @@
 # Русскоязычные ленты работают сразу:
 ru | StopGame | https://rss.stopgame.ru/rss_news.xml
 ru | 3DNews Игры | https://3dnews.ru/games/rss/
-ru | Игромания | https://www.igromania.ru/rss/rss_news.xml
+# ru | Игромания | https://www.igromania.ru/rss/rss_news.xml (таймаут)
 ru | Playground | https://www.playground.ru/rss/news.xml
 
 # Англоязычные ленты: бот возьмёт их, только если в .env настроен ИИ-перевод (AI_BASE_URL, AI_API_KEY, AI_MODEL).
