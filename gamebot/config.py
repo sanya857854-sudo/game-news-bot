@@ -176,6 +176,11 @@ def load_config(require_telegram: bool = True) -> Config:
             f"POST_STYLE={post_style!r} не поддерживается. Выберите prepod, stars или platforma."
         )
 
+    default_db = "data/bot.db"
+    # Если запущены в Amvera или Docker с примонтированным разделом /data
+    if os.path.isdir("/data") and os.access("/data", os.W_OK):
+        default_db = "/data/bot.db"
+
     return Config(
         bot_token=token,
         channel_id=channel,
@@ -222,7 +227,7 @@ def load_config(require_telegram: bool = True) -> Config:
         ai_api_key=_get("AI_API_KEY"),
         ai_model=_get("AI_MODEL"),
         youtube_api_key=_get("YOUTUBE_API_KEY"),
-        db_path=path("DB_PATH", "data/bot.db"),
+        db_path=Path(default_db) if default_db.startswith("/") else path("DB_PATH", default_db),
         log_dir=path("LOG_DIR", "logs"),
         log_level=_get("LOG_LEVEL", "INFO").upper(),
     )
