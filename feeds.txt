@@ -3,17 +3,17 @@
 # Строки, начинающиеся с #, бот игнорирует. Чтобы отключить ленту — поставьте # в начале строки.
 #
 # ВАЖНО: адреса лент иногда меняются. Проверить все ленты можно командой:  python main.py --check
-# Если какая-то лента «не открылась» — найдите её актуальный адрес на сайте (ищите значок RSS)
-# или просто отключите. Остальные продолжат работать.
-#
-# Русскоязычные ленты работают сразу:
+
+# Русскоязычные ленты новостей об играх, студиях и индустрии:
 ru | StopGame | https://rss.stopgame.ru/rss_news.xml
+ru | DTF Игры | https://dtf.ru/rss
+ru | VGTimes | https://vgtimes.ru/rss.xml
+ru | App2Top (Студии и разработка) | https://app2top.ru/feed
+ru | Riot Pixels | http://riotpixels.com/feed/
 ru | 3DNews Игры | https://3dnews.ru/games/rss/
-# ru | Игромания | https://www.igromania.ru/rss/rss_news.xml (таймаут)
 ru | Playground | https://www.playground.ru/rss/news.xml
 
 # Англоязычные ленты: бот возьмёт их, только если в .env настроен ИИ-перевод (AI_BASE_URL, AI_API_KEY, AI_MODEL).
-# Уберите # в начале нужных строк.
 # en | PC Gamer | https://www.pcgamer.com/rss/
 # en | Rock Paper Shotgun | https://www.rockpapershotgun.com/feed
 # en | Eurogamer | https://www.eurogamer.net/feed

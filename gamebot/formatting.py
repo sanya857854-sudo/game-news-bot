@@ -136,6 +136,7 @@ def line_prefix(cfg: Config) -> str:
 
 
 _KEYWORD_EMOJI = [
+    (r"студи|разработ|индустри|valve|rockstar|sony|xbox|blizzard|ubisoft|cd\s*projekt", "🏢"),
     (r"трейлер|тизер|trailer|teaser", "🎬"),
     (r"патч|обновлен|апдейт|update|patch|hotfix", "🛠"),
     (r"раздач|бесплатн|free", "🎁"),
@@ -146,6 +147,13 @@ _KEYWORD_EMOJI = [
     (r"playstation|ps5|xbox|nintendo|switch", "🕹"),
 ]
 _KIND_EMOJI = {"release": "🎮", "upcoming": "🗓", "free": "🎁", "discount": "🔥", "news": "📰"}
+
+_STUDIO_PATTERNS = [
+    r"\b(valve|rockstar|cd\s*projekt|cdpr|naughty\s*dog|insomniac|bethesda|activision|blizzard|ubisoft|bioware|respawn|dice|capcom|fromsoftware|square\s*enix|epic\s*games|larian|remedy|bungie|kojima|sega|atlus|konami|gsc|mundfish|take-two|saber|krafton|supercell|warner\s*bros|electronic\s*arts)\b",
+    r"(гейб\s*ньюэлл|кодзима|рокстар|близзард|юбисофт|капком|лариан|сони|майкрософт|эпик\s*геймс|миязаки|миядзаки|бетесда|наути\s*дог)",
+    r"\b(playstation|xbox|nintendo|sony|microsoft)\b",
+    r"(игров(ая|ой|ую|ые|ых)\s*студи|разработчик|увольнен|поглощен|закрыти[ея]\s*студи|отчет\s*компани|приобретен|финансов(ый|ые)\s*отчет)",
+]
 
 
 def pick_emoji(cfg: Config, kind: str, title: str = "") -> str:
@@ -193,6 +201,8 @@ _THEME_HASHTAGS = (
     (r"fallout", "#fallout"),
     (r"doom", "#doom"),
     (r"space marine|warhammer", "#warhammer"),
+    (r"valve|рокстар|rockstar|cd projekt|cdpr|blizzard|ubisoft|bethesda|bioware|larian|remedy|capcom", "#студии"),
+    (r"индустри|разработчик|продаж|отчет|увольнен|поглощен", "#индустрия"),
 )
 
 _KIND_HASHTAGS = {
@@ -365,14 +375,17 @@ def news_post_text(
     link: str,
     with_slot: bool = True,
 ) -> str:
-    title_line = f"{_prefix(cfg, title_emoji(cfg, 'news', title))}<b>{esc(title)}</b>"
+    full_blob = f"{title} {summary}"
+    is_studio = any(re.search(pat, full_blob, re.I) for pat in _STUDIO_PATTERNS)
+    badge = "🏢 <b>Студии & Индустрия</b>\n" if is_studio else ""
+    title_line = f"{badge}{_prefix(cfg, title_emoji(cfg, 'news', title))}<b>{esc(title)}</b>"
     tail = []
     if cfg.show_source_link and link:
         tail.append(f'{line_prefix(cfg)}<a href="{esc_attr(link)}">Источник: {esc(source_name)}</a>')
     question = engagement_html(cfg, "news")
     if question:
         tail.append(question)
-    hashtags = generate_hashtags(cfg, "news", f"{title} {summary}")
+    hashtags = generate_hashtags(cfg, "news", full_blob)
     return _assemble(cfg, title_line, summary, [], tail, with_slot=with_slot, hashtags=hashtags)
 
 

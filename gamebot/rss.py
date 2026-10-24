@@ -249,6 +249,6 @@ def build_post(cfg: Config, feed: Feed, entry: Dict) -> Optional[Post]:
         photos=[image] if image else [],
         trailer_url=trailer_url,
         link=entry["link"],
-        button_text=f"📖 Читать полностью ({source_name})",
+        button_text=f"📖 Читать полностью ({feed.name})",
         button_url=entry["link"],
     )

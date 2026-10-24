@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-from . import formatting, giveaways, growth, hotness, publisher, rss, steam
+from . import deals, formatting, giveaways, growth, hotness, publisher, rss, steam
 from .config import Config
 from .models import Candidate
 from .storage import Storage
@@ -59,6 +59,10 @@ class Bot:
             found += giveaways.list_candidates(self.cfg, self.storage)
         except Exception as exc:
             log.warning("Раздачи сейчас недоступны: %s", exc)
+        try:
+            found += deals.list_candidates(self.cfg, self.storage)
+        except Exception as exc:
+            log.warning("Скидки CheapShark сейчас недоступны: %s", exc)
         if self.cfg.enable_steam:
             try:
                 found += steam.list_candidates(self.cfg, self.storage)
