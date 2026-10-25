@@ -90,7 +90,7 @@ _WEIGHTS = (
 MAX_BONUS = 2.5
 
 # Какие типы материалов вообще считаются «горячими».
-HOT_KINDS = ("news", "free")
+HOT_KINDS = ("discount", "news", "free", "release")
 
 
 def bonus(title: str) -> float:
@@ -102,9 +102,16 @@ def bonus(title: str) -> float:
 
 def score(candidate: Candidate) -> float:
     """Итоговая «интересность»: базовый балл плюс тематический бонус."""
+    b = bonus(candidate.title)
+    if candidate.kind == "discount":
+        # Крупные скидки (-80%, -90%) и хиты получают высокий приоритет
+        extra = 1.5 if ("-8" in candidate.title or "-9" in candidate.title) else 0.5
+        return candidate.score + b + extra
     if candidate.kind == "news":
-        return candidate.score + bonus(candidate.title)
-    return candidate.score
+        return candidate.score + b
+    if candidate.kind == "release":
+        return candidate.score + b + 0.5
+    return candidate.score + b
 
 
 def is_hot(candidate: Candidate, threshold: float) -> bool:

@@ -76,11 +76,16 @@ class Bot:
         return found
 
     def rank(self, candidates: List[Candidate]) -> List[Candidate]:
-        """Лучшие — вверху. Чтобы канал не был однообразным, повтор типа поста подряд штрафуется."""
-        recent = self.storage.recent_kinds(3)
+        """Лучшие — вверху. Чтобы канал не был однообразным, повтор типа поста подряд строго штрафуется."""
+        recent = self.storage.recent_kinds(4)
 
         def adjusted(c: Candidate) -> float:
-            return c.score - SAME_KIND_PENALTY * recent.count(c.kind) + random.random() * 0.3
+            penalty = 0.0
+            if recent:
+                if c.kind == recent[0]:
+                    penalty += 3.0  # Жесткий штраф за повтор того же типа подряд
+                penalty += SAME_KIND_PENALTY * recent.count(c.kind)
+            return c.score - penalty + random.random() * 0.2
 
         return sorted(candidates, key=adjusted, reverse=True)
 
@@ -223,8 +228,9 @@ class Bot:
         return any(len(words & self._topic_words(other)) >= 2 for other in recent)
 
     def post_hot(self, candidates: List[Candidate]) -> bool:
-        """Публикует самый интересный материал, если он достаточно «горячий»."""
+        """Публикует самый интересный материал, если он достаточно «горячий», соблюдая разнообразие рубрик."""
         hot: List[Candidate] = []
+        recent = self.storage.recent_kinds(4)
         for cand in candidates:
             if not hotness.is_hot(cand, self.cfg.hot_min_score):
                 continue
@@ -234,7 +240,17 @@ class Bot:
             hot.append(cand)
         if not hot:
             return False
-        hot.sort(key=hotness.score, reverse=True)
+
+        # Обязательная ротация: жесткий штраф за повтор того же типа подряд
+        def hot_adjusted(c: Candidate) -> float:
+            penalty = 0.0
+            if recent:
+                if c.kind == recent[0]:
+                    penalty += 3.5  # Не постить две новости или две раздачи подряд
+                penalty += 1.5 * recent.count(c.kind)
+            return hotness.score(c) - penalty
+
+        hot.sort(key=hot_adjusted, reverse=True)
         best = hot[0]
         log.info(
             "Горячая тема: %s (%.1f; %s)",

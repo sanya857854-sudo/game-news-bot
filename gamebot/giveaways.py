@@ -105,18 +105,23 @@ def list_candidates(cfg: Config, storage: Storage) -> List[Candidate]:
         platforms = (item.get("platforms") or "").lower()
         status = (item.get("status") or "").lower()
         
-        # Берем только активные раздачи для PC / Steam / Epic Games / GOG
+        # Берем только проверенные раздачи крупных платформ (Steam, Epic Games Store, GOG)
+        # Отсекаем мусорный инди-шлак с itch.io, IndieGala, Stove и неизвестных сайтов
         if status and status != "active":
             continue
-        if not any(p in platforms for p in ("pc", "steam", "epic", "gog")):
+        if any(b in platforms for b in ("itch.io", "indiegala", "stove")):
+            continue
+        if not any(p in platforms for p in ("steam", "epic", "gog")):
             continue
             
         key = f"giveaway:{gid}"
         if storage.is_known(key):
             continue
             
-        # Раздачи имеют наивысший приоритет (виральный контент)
-        score = 8.5
+        # Сбалансированный скор (не выше топовых скидок и хитов)
+        score = 6.5
+        if "steam" in platforms or "epic" in platforms:
+            score += 0.8
         candidates.append(
             Candidate(
                 key=key,
