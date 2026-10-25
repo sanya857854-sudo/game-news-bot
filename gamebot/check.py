@@ -4,7 +4,7 @@ from __future__ import annotations
 import shutil
 from datetime import datetime, timezone
 
-from . import ai, net, rss, steam
+from . import ai, giveaways, net, rss, steam
 from .config import Config
 from .telegram import Telegram, TelegramError
 
@@ -55,6 +55,18 @@ def run_check(cfg: Config) -> int:
     else:
         print("  — выключен (ENABLE_STEAM=false)")
 
+    # --- Раздачи ---
+    print("\nРаздачи (только Steam и Epic Games Store):")
+    try:
+        epic = giveaways.fetch_epic()
+        names = ", ".join(i["element"].get("title", "?") for i in epic) or "сейчас нет"
+        print(f"{OK} Epic: витрина доступна, бесплатно сейчас: {names}")
+    except Exception as exc:
+        print(f"{WARN} Epic: витрина не ответила ({exc}) — бот возьмёт раздачи Epic из GamerPower")
+    gp = giveaways.fetch_gamerpower("steam")
+    print(f"{OK if gp else WARN} Steam-раздачи (GamerPower): найдено {len(gp)}" if gp
+          else f"{WARN} Steam-раздачи (GamerPower): сейчас список пуст или сервис не ответил")
+
     # --- RSS ---
     print("\nRSS-ленты:")
     if cfg.enable_rss:
@@ -101,6 +113,12 @@ def run_check(cfg: Config) -> int:
               f"порог интересности {cfg.hot_min_score:.1f})")
     else:
         print("  — Горячие новости выключены (HOT_NEWS=false): только плановые посты")
+    days = ["понедельникам", "вторникам", "средам", "четвергам", "пятницам", "субботам", "воскресеньям"]
+    if cfg.digest_enabled:
+        print(f"{OK} Подборка скидок: по {days[cfg.digest_weekday]} после {cfg.digest_hour}:00 "
+              f"(до {cfg.digest_max_items} игр, скидка от {cfg.digest_min_discount}%)")
+    else:
+        print("  — Подборка скидок выключена (DIGEST_ENABLED=false)")
 
     print("\n" + ("Всё готово к запуску!" if problems == 0 else f"Нужно исправить: {problems}."))
     return 1 if problems else 0

@@ -60,6 +60,24 @@ def _list(name: str, default: str) -> List[str]:
     return [part.strip().lower() for part in value.split(",") if part.strip()]
 
 
+_WEEKDAYS = {
+    "пн": 0, "пон": 0, "mon": 0, "вт": 1, "tue": 1, "ср": 2, "wed": 2, "чт": 3, "thu": 3,
+    "пт": 4, "пят": 4, "fri": 4, "сб": 5, "sat": 5, "вс": 6, "sun": 6,
+}
+
+
+def _weekday(name: str, default: int) -> int:
+    value = _get(name).lower()
+    if value == "":
+        return default
+    if value.isdigit() and 0 <= int(value) <= 6:
+        return int(value)
+    day = _WEEKDAYS.get(value[:3]) if value[:3] in _WEEKDAYS else _WEEKDAYS.get(value[:2])
+    if day is None:
+        raise ConfigError(f"{name} должен быть днём недели (пятница, fri или число 0-6), а сейчас: {value!r}")
+    return day
+
+
 def _quiet_hours(value: str) -> Optional[Tuple[int, int]]:
     if not value:
         return None
@@ -93,6 +111,15 @@ class Config:
     show_source_link: bool
     show_steam_link: bool
     enable_hashtags: bool
+    rubric_labels: bool
+
+    # --- пятничный дайджест скидок ---
+    digest_enabled: bool
+    digest_weekday: int
+    digest_hour: int
+    digest_min_discount: int
+    digest_min_reviews: int
+    digest_max_items: int
 
     # --- рост канала ---
     subscribe_button: bool
@@ -187,14 +214,21 @@ def load_config(require_telegram: bool = True) -> Config:
         signature=signature,
         api_base=_get("TELEGRAM_API_BASE", "https://api.telegram.org").rstrip("/"),
         timezone=timezone,
-        post_interval_minutes=_int("POST_INTERVAL_MINUTES", 90, minimum=5),
+        post_interval_minutes=_int("POST_INTERVAL_MINUTES", 30, minimum=5),
         retry_minutes=_int("RETRY_MINUTES", 20, minimum=1),
         quiet_hours=_quiet_hours(_get("QUIET_HOURS", "0-8")),
-        max_posts_per_day=_int("MAX_POSTS_PER_DAY", 12, minimum=1),
+        max_posts_per_day=_int("MAX_POSTS_PER_DAY", 24, minimum=1),
         use_emoji=_bool("USE_EMOJI", True),
         show_source_link=_bool("SHOW_SOURCE_LINK", True),
         show_steam_link=_bool("SHOW_STEAM_LINK", True),
         enable_hashtags=_bool("ENABLE_HASHTAGS", True),
+        rubric_labels=_bool("RUBRIC_LABELS", True),
+        digest_enabled=_bool("DIGEST_ENABLED", True),
+        digest_weekday=_weekday("DIGEST_WEEKDAY", 4),
+        digest_hour=_int("DIGEST_HOUR", 18, minimum=0),
+        digest_min_discount=_int("DIGEST_MIN_DISCOUNT", 30, minimum=1),
+        digest_min_reviews=_int("DIGEST_MIN_REVIEWS", 20000, minimum=0),
+        digest_max_items=_int("DIGEST_MAX_ITEMS", 12, minimum=3),
         subscribe_button=_bool("SUBSCRIBE_BUTTON", True),
         subscribe_button_text=_get("SUBSCRIBE_BUTTON_TEXT", "📣 Подписаться на канал"),
         track_joins=_bool("TRACK_JOINS", True),
@@ -202,8 +236,8 @@ def load_config(require_telegram: bool = True) -> Config:
         post_question=_bool("POST_QUESTION", True),
         hot_news=_bool("HOT_NEWS", True),
         hot_min_score=_float("HOT_MIN_SCORE", 5.0, minimum=0.0),
-        hot_min_gap_minutes=_int("HOT_MIN_GAP_MINUTES", 25, minimum=5),
-        poll_seconds=_int("POLL_SECONDS", 600, minimum=60),
+        hot_min_gap_minutes=_int("HOT_MIN_GAP_MINUTES", 10, minimum=5),
+        poll_seconds=_int("POLL_SECONDS", 300, minimum=60),
         enable_steam=_bool("ENABLE_STEAM", True),
         enable_rss=_bool("ENABLE_RSS", True),
         feeds_file=path("FEEDS_FILE", "feeds.txt"),

@@ -7,6 +7,7 @@
 Опубликовать один пост прямо сейчас:    python main.py --once
 Показать пост, не отправляя в канал:    python main.py --once --dry-run
 Отправить тестовое сообщение в канал:   python main.py --ping
+Подборка пятничных скидок сейчас:       python main.py --digest   (с --dry-run — только показать)
 """
 from __future__ import annotations
 
@@ -80,6 +81,7 @@ def main() -> int:
     parser.add_argument("--once", action="store_true", help="опубликовать один пост и выйти")
     parser.add_argument("--dry-run", action="store_true", help="вместе с --once: только показать пост")
     parser.add_argument("--ping", action="store_true", help="отправить в канал тестовое сообщение")
+    parser.add_argument("--digest", action="store_true", help="опубликовать подборку скидок прямо сейчас (с --dry-run — только показать)")
     args = parser.parse_args()
 
     try:
@@ -105,6 +107,9 @@ def main() -> int:
         bot.tg.send_message("✅ Бот подключён к каналу и готов к работе.")
         print("Тестовое сообщение отправлено — загляните в канал.")
         return 0
+
+    if args.digest:
+        return 0 if bot.post_digest(manual=True) else 1
 
     if args.once:
         return 0 if bot.post_one() else 1

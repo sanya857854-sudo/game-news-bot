@@ -4,7 +4,9 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+import time
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
@@ -169,21 +171,70 @@ def _usable_image(url: str) -> bool:
 
 
 # ---------------------------------------------------------------- кандидаты
+FEED_TIMEOUT = 15            # сколько секунд ждём одну ленту
+FEED_WORKERS = 6             # сколько лент качаем одновременно
+MAX_QUARANTINE = 6 * 3600    # самая долгая пауза для сломанной ленты — 6 часов
+_warned_foreign = set()      # про «не русскую ленту без ИИ» пишем в лог один раз
+
+
+def _quarantine_left(storage: Storage, feed: Feed) -> float:
+    """Сколько секунд ленту ещё не трогаем (она недавно не открылась). 0 — можно пробовать."""
+    raw = storage.meta_get("feedfail:" + feed.url) or ""
+    try:
+        _, until = raw.split("|")
+        return max(0.0, float(until) - time.time())
+    except ValueError:
+        return 0.0
+
+
+def _quarantine_update(storage: Storage, feed: Feed, ok: bool) -> None:
+    """Лента ответила — обнуляем счётчик; не ответила — пауза растёт: 15 мин, 30 мин, 1 ч ... до 6 ч."""
+    key = "feedfail:" + feed.url
+    if ok:
+        if storage.meta_get(key) not in (None, "0|0"):
+            storage.meta_set(key, "0|0")
+        return
+    try:
+        fails = int((storage.meta_get(key) or "0|0").split("|")[0]) + 1
+    except ValueError:
+        fails = 1
+    pause = min(MAX_QUARANTINE, 900 * 2 ** (fails - 1))
+    storage.meta_set(key, f"{fails}|{time.time() + pause}")
+
+
+def _load_entries(feed: Feed):
+    try:
+        return feed, parse_feed(net.get(feed.url, timeout=FEED_TIMEOUT, retries=2).content), None
+    except Exception as exc:
+        return feed, None, exc
+
+
 def list_candidates(cfg: Config, storage: Storage) -> List[Candidate]:
     feeds = load_feeds(cfg.feeds_file)
     now = datetime.now(timezone.utc)
     max_age = timedelta(hours=cfg.rss_max_age_hours)
     candidates: List[Candidate] = []
 
+    active: List[Feed] = []
     for feed in feeds:
         if feed.lang != "ru" and not ai.enabled(cfg):
-            log.info("Лента «%s» не на русском, а ИИ-перевод не настроен — пропускаю", feed.name)
+            if feed.url not in _warned_foreign:
+                _warned_foreign.add(feed.url)
+                log.info("Лента «%s» не на русском, а ИИ-перевод не настроен — пропускаю", feed.name)
             continue
-        try:
-            entries = parse_feed(net.get(feed.url, timeout=25).content)
-        except Exception as exc:
-            log.warning("Лента «%s» недоступна: %s", feed.name, exc)
+        if _quarantine_left(storage, feed) > 0:
             continue
+        active.append(feed)
+
+    with ThreadPoolExecutor(max_workers=FEED_WORKERS) as pool:
+        loaded = list(pool.map(_load_entries, active))
+
+    for feed, entries, error in loaded:
+        if error is not None:
+            _quarantine_update(storage, feed, ok=False)
+            log.warning("Лента «%s» недоступна: %s (временно отключаю, потом попробую снова)", feed.name, error)
+            continue
+        _quarantine_update(storage, feed, ok=True)
 
         for entry in entries[:25]:
             if not entry["title"] or not entry["link"]:

@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-from . import deals, formatting, giveaways, growth, hotness, publisher, rss, steam
+from . import deals, digest, formatting, giveaways, growth, hotness, publisher, rss, steam
 from .config import Config
 from .models import Candidate
 from .storage import Storage
@@ -42,6 +42,7 @@ class Bot:
         self.tz = ZoneInfo(cfg.timezone)
         self._stop = threading.Event()
         self._retry_at = 0.0
+        self._digest_retry_at = 0.0
         self._invite_url_val: Optional[str] = None
 
     # ---------------------------------------------------------------- ссылка «Подписаться»
@@ -258,6 +259,63 @@ class Bot:
         )
         return self.post_one(hot)
 
+    # ---------------------------------------------------------------- пятничный дайджест скидок
+    def _digest_week_key(self) -> str:
+        iso = datetime.now(self.tz).isocalendar()
+        return f"digest:{iso[0]}-W{iso[1]:02d}"
+
+    def digest_due(self) -> bool:
+        """Пора ли публиковать пятничную подборку скидок (раз в неделю, в заданный день после заданного часа)."""
+        cfg = self.cfg
+        if not cfg.digest_enabled:
+            return False
+        now = datetime.now(self.tz)
+        if now.weekday() != cfg.digest_weekday or now.hour < cfg.digest_hour:
+            return False
+        if self.storage.is_known(self._digest_week_key()):
+            return False
+        return time.time() >= self._digest_retry_at
+
+    def post_digest(self, manual: bool = False) -> bool:
+        """Собирает и публикует дайджест скидок. True — опубликован (или показан в тестовом режиме).
+
+        manual=True — запуск вручную (python main.py --digest). Если сегодня не пятница, такая публикация
+        не считается «недельной», и в пятницу бот всё равно выпустит свою подборку."""
+        key = self._digest_week_key()
+        try:
+            post = digest.build_post(self.cfg)
+        except requests.RequestException as exc:
+            log.warning("Дайджест скидок: сеть недоступна (%s), попробую позже", exc)
+            post = None
+        except Exception:
+            log.exception("Дайджест скидок не собрался")
+            post = None
+        if post is None:
+            self._digest_retry_at = time.time() + self.cfg.retry_minutes * 60
+            return False
+        if self.dry_run:
+            print("\n" + "=" * 60 + "\nТЕСТОВЫЙ РЕЖИМ: пятничный дайджест (в канал ничего не отправляется)\n" + "-" * 60)
+            print(post.text)
+            print("-" * 60)
+            print("Кнопка:", f"[{post.button_text}] ➔ {post.button_url}")
+            print("Опрос:", f"«{post.poll_question}» -> {post.poll_options}")
+            print("=" * 60 + "\n")
+            return True
+        try:
+            publisher.publish(self.cfg, self.tg, post, self._invite_url())
+        except TelegramError as exc:
+            log.error("Дайджест скидок не отправился: %s", exc)
+            self._digest_retry_at = time.time() + self.cfg.retry_minutes * 60
+            return False
+        except Exception:
+            log.exception("Дайджест скидок не отправился")
+            self._digest_retry_at = time.time() + self.cfg.retry_minutes * 60
+            return False
+        if not manual or datetime.now(self.tz).weekday() == self.cfg.digest_weekday:
+            self.storage.mark(key, "digest", "Пятничные скидки Steam", "posted")
+        log.info("✔ Пост опубликован [digest]: пятничные скидки")
+        return True
+
     # ---------------------------------------------------------------- запуск
     def request_stop(self) -> None:
         self._stop.set()
@@ -281,6 +339,8 @@ class Bot:
                 if self.in_quiet_hours():
                     self._stop.wait(300)
                     continue
+                if self.digest_due():
+                    self.post_digest()                     # раз в неделю, по пятницам
                 if self.daily_cap_reached():
                     log.info("Дневной лимит постов (%d) достигнут — жду до завтра", cfg.max_posts_per_day)
                     self._stop.wait(1800)

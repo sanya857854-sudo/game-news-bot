@@ -6,6 +6,9 @@
 """
 from __future__ import annotations
 
+import re
+from typing import Optional
+
 from .models import Candidate
 
 # Пары «подстрока в заголовке (в нижнем регистре)» -> вес.
@@ -85,6 +88,61 @@ _WEIGHTS = (
     ("steam", 0.3),
 )
 
+# ---------------------------------------------------------------- рубрики важных новостей
+# Это «инфоповоды», которые канал хочет публиковать сразу: новый трейлер, выход игры,
+# новости студий и индустрии. По заголовку бот понимает, к какой рубрике относится новость.
+_TRAILER_RE = re.compile(
+    r"трейлер|тизер|геймплейн\w*\s+(?:ролик|показ|видео|трейлер)|игровой\s+процесс\s+показ|"
+    r"\btrailer\b|\bteaser\b|gameplay\s+(?:reveal|trailer)",
+    re.I,
+)
+_RELEASE_RE = re.compile(
+    r"\b(?:вышл[аио]|вышел)\b(?!\s+(?:патч|обновлен|апдейт|трейлер|тизер|ролик|геймплей|дополнени|dlc|мод|новый\s+патч|"
+    r"новый\s+трейлер|первый\s+трейлер))|"
+    r"состоялся\s+релиз|релиз(?:нулась|нулся|овалась|овался)|уже\s+в\s+продаже|"
+    r"доступн[аы]\s+(?:в|на)\s+(?:steam|ps5|ps4|xbox|switch|pc|пк)|стартовал[аи]?\s+(?:релиз|продаж)",
+    re.I,
+)
+_STUDIO_COMPANY_RE = re.compile(
+    r"\b(?:valve|rockstar|cd\s*projekt|cdpr|naughty\s*dog|insomniac|bethesda|activision|blizzard|ubisoft|bioware|"
+    r"respawn|dice|capcom|fromsoftware|square\s*enix|epic\s*games|larian|remedy|bungie|sega|atlus|konami|gsc|"
+    r"take-two|krafton|supercell|warner\s*bros|electronic\s*arts|ea|playstation|xbox|nintendo|sony|microsoft|"
+    r"embracer|tencent|netease|bandai\s*namco|paradox|sweet\s*baby|obsidian|id\s*software)\b|"
+    r"гейб\s*ньюэлл|кодзима|рокстар|близзард|юбисофт|капком|лариан|сони|майкрософт|миядзаки|миязаки|бетесда|"
+    r"игров\w+\s+студи|разработчик\w*|издател\w+",
+    re.I,
+)
+_STUDIO_EVENT_RE = re.compile(
+    r"закры\w+|увол\w+|сокращ\w+|поглощ\w+|приобре\w+|купил[аи]?\b|покупк|слиян|банкрот|забастов|выручк|"
+    r"финансов\w+\s+отч[её]т|отч[её]т\w*\s+за|инвестиц|основал|основател|покинул|ушл[аи]?\b|ушёл|уход\b|"
+    r"судебн|\bиск\b|лицензи|реорганиз|перезапуск\s+студи|открыл\w*\s+студи|нов(?:ая|ую)\s+студи",
+    re.I,
+)
+
+# Метки рубрик (их печатает formatting над заголовком поста).
+RUBRIC_LABELS = {
+    "trailer": "🎬 НОВЫЙ ТРЕЙЛЕР",
+    "release": "🚀 РЕЛИЗ",
+    "studio": "🏢 СТУДИИ И ИНДУСТРИЯ",
+}
+
+# Насколько рубрика поднимает «интересность» новости (чтобы такие новости шли вне очереди).
+RUBRIC_BONUS = {"trailer": 0.8, "release": 0.9, "studio": 0.8}
+
+
+def rubric(title: str, text: str = "") -> Optional[str]:
+    """Определяет рубрику новости по заголовку (и тексту): trailer / release / studio / None."""
+    head = title or ""
+    blob = f"{head} {text or ''}"
+    if _TRAILER_RE.search(head):
+        return "trailer"
+    if _RELEASE_RE.search(head):
+        return "release"
+    if _STUDIO_COMPANY_RE.search(blob) and _STUDIO_EVENT_RE.search(head):
+        return "studio"
+    return None
+
+
 # Бонус не может быть больше этого значения, иначе один заголовок
 # с кучей слов перевесит всё остальное.
 MAX_BONUS = 2.5
@@ -108,13 +166,16 @@ def score(candidate: Candidate) -> float:
         extra = 1.5 if ("-8" in candidate.title or "-9" in candidate.title) else 0.5
         return candidate.score + b + extra
     if candidate.kind == "news":
-        return candidate.score + b
+        return candidate.score + b + RUBRIC_BONUS.get(rubric(candidate.title) or "", 0.0)
     if candidate.kind == "release":
         return candidate.score + b + 0.5
     return candidate.score + b
 
 
 def is_hot(candidate: Candidate, threshold: float) -> bool:
+    """«Горячее» публикуется вне очереди. Раздачи Steam/Epic горячие всегда: у них есть срок."""
+    if candidate.kind == "free":
+        return True
     return candidate.kind in HOT_KINDS and score(candidate) >= threshold
 
 
@@ -122,4 +183,8 @@ def describe(candidate: Candidate) -> str:
     """Короткое пояснение для лога: какие темы сработали."""
     low = (candidate.title or "").lower()
     hits = [word for word, _ in _WEIGHTS if word in low]
+    if candidate.kind == "news":
+        rub = rubric(candidate.title)
+        if rub:
+            hits.insert(0, "рубрика: " + rub)
     return ", ".join(hits[:4]) if hits else "без ключевых слов"

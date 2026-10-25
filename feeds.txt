@@ -2,9 +2,11 @@
 # Формат строки:   язык | название | адрес ленты
 # Строки, начинающиеся с #, бот игнорирует. Чтобы отключить ленту — поставьте # в начале строки.
 #
-# ВАЖНО: адреса лент иногда меняются. Проверить все ленты можно командой:  python main.py --check
+# Проверить все ленты разом (какие открываются, какие нет):   python main.py --check
+# Если лента не открылась, бот сам делает паузу (15 минут, потом дольше — до 6 часов) и пробует снова,
+# поэтому один «упавший» сайт остальных не тормозит. Адреса лент иногда меняются — тогда просто поправьте строку.
 
-# Русскоязычные ленты новостей об играх, студиях и индустрии:
+# ---------------- Русскоязычные сайты (работают сразу, без дополнительных настроек) ----------------
 ru | StopGame | https://rss.stopgame.ru/rss_news.xml
 ru | DTF Игры | https://dtf.ru/rss
 ru | VGTimes | https://vgtimes.ru/rss.xml
@@ -13,8 +15,36 @@ ru | Riot Pixels | http://riotpixels.com/feed/
 ru | 3DNews Игры | https://3dnews.ru/games/rss/
 ru | Playground | https://www.playground.ru/rss/news.xml
 
-# Англоязычные ленты: бот возьмёт их, только если в .env настроен ИИ-перевод (AI_BASE_URL, AI_API_KEY, AI_MODEL).
-# en | PC Gamer | https://www.pcgamer.com/rss/
-# en | Rock Paper Shotgun | https://www.rockpapershotgun.com/feed
-# en | Eurogamer | https://www.eurogamer.net/feed
-# en | GamesRadar | https://www.gamesradar.com/rss/
+# Неактивные RSS-ленты (отключены во избежание 404)
+# ru | Канобу | https://kanobu.ru/rss/
+# ru | GameMAG | https://gamemag.ru/rss
+# ru | Gamebomb | https://gamebomb.ru/rss
+# ru | iXBT Games | https://www.ixbt.games/rss/news
+ru | Игромания | https://www.igromania.ru/rss/rss_news.xml
+
+# ---------------- Англоязычные сайты ----------------
+# Бот возьмёт их ТОЛЬКО если в файле .env настроен ИИ-перевод (AI_BASE_URL, AI_API_KEY, AI_MODEL) —
+# он переведёт заголовок и описание на русский. Без перевода эти строки просто пропускаются.
+# Пошаговая инструкция, как получить бесплатный ключ, — в файле ЧТО_ИЗМЕНИЛОСЬ.md (раздел «Английские сайты»).
+
+# Новости и релизы
+en | PC Gamer | https://www.pcgamer.com/rss/
+en | Rock Paper Shotgun | https://www.rockpapershotgun.com/feed
+en | Eurogamer | https://www.eurogamer.net/feed
+en | GamesRadar | https://www.gamesradar.com/rss/
+en | IGN | https://feeds.ign.com/ign/games-all
+en | GameSpot | https://www.gamespot.com/feeds/mashup/
+en | Video Games Chronicle | https://www.videogameschronicle.com/feed/
+en | Kotaku | https://kotaku.com/rss
+en | Polygon | https://www.polygon.com/rss/index.xml
+
+# Анонсы и трейлеры
+en | Gematsu | https://www.gematsu.com/feed
+
+# Студии и индустрия
+en | GamesIndustry.biz | https://www.gamesindustry.biz/feed
+
+# Официальные блоги платформ
+en | PlayStation Blog | https://blog.playstation.com/feed/
+en | Xbox Wire | https://news.xbox.com/en-us/feed/
+en | Steam News | https://store.steampowered.com/feeds/news.xml

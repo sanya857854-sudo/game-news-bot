@@ -4,10 +4,12 @@ from __future__ import annotations
 import html
 import random
 import re
+import time
 from datetime import date, datetime
 from typing import Iterable, List, Optional
 from zoneinfo import ZoneInfo
 
+from . import hotness
 from .config import Config
 from .models import TRAILER_SLOT
 
@@ -85,6 +87,35 @@ def ru_date(value: date, today: Optional[date] = None) -> str:
 def ru_date_from_ts(timestamp: float, tz: str) -> str:
     moment = datetime.fromtimestamp(timestamp, ZoneInfo(tz))
     return ru_date(moment.date(), datetime.now(ZoneInfo(tz)).date())
+
+
+def time_left_phrase(until_ts: Optional[float]) -> str:
+    """«осталось меньше суток» / «осталось 3 дн.» — чтобы читатель видел срочность. Пусто, если срока нет."""
+    if not until_ts:
+        return ""
+    left = float(until_ts) - time.time()
+    if left <= 0:
+        return ""
+    if left < 86400:
+        hours = max(1, int(left // 3600))
+        return "осталось меньше суток" if hours >= 12 else f"осталось около {hours} ч."
+    days = int(left // 86400)
+    return f"осталось {days} дн."
+
+
+_STEAM_KIND_LABELS = {
+    "free": "🎁 ХАЛЯВА",
+    "discount": "🔥 СКИДКА",
+    "release": "🚀 РЕЛИЗ",
+    "upcoming": "🗓 СКОРО РЕЛИЗ",
+}
+
+
+def rubric_line(cfg: Config, label: Optional[str]) -> str:
+    """Строка-рубрика над заголовком («🎁 ХАЛЯВА»). Пусто, если рубрики выключены (RUBRIC_LABELS=false)."""
+    if not label or not getattr(cfg, "rubric_labels", True):
+        return ""
+    return f"<b>{label}</b>\n"
 
 
 def format_price(cents: int, currency: str) -> str:
@@ -334,8 +365,10 @@ def steam_post_text(
     elif kind == "free":
         title = f"В Steam началась раздача {n}"
         if until_ts:
+            left = time_left_phrase(until_ts)
+            left_txt = f" ({left})" if left else ""
             middle.append(
-                f"{line_prefix(cfg)}Забрать игру бесплатно можно до {ru_date_from_ts(until_ts, cfg.timezone)}."
+                f"{line_prefix(cfg)}Забрать игру бесплатно можно до {ru_date_from_ts(until_ts, cfg.timezone)}{left_txt}."
             )
         else:
             middle.append(f"{line_prefix(cfg)}Забрать игру можно бесплатно, пока идёт акция.")
@@ -356,8 +389,13 @@ def steam_post_text(
         cnt_str = f"{player_count:,}".replace(",", " ")
         middle.append(f"{line_prefix(cfg)}👥 Онлайн прямо сейчас: <b>{cnt_str}</b> игроков")
 
-    title_line = f"{_prefix(cfg, title_emoji(cfg, kind))}<b>{title}</b>"
+    title_line = (
+        f"{rubric_line(cfg, _STEAM_KIND_LABELS.get(kind))}"
+        f"{_prefix(cfg, title_emoji(cfg, kind))}<b>{title}</b>"
+    )
     tail = []
+    if kind == "free":
+        tail.append(f"{line_prefix(cfg)}Заберите, пока акция идёт: потом игра вернётся к обычной цене.")
     if cfg.show_steam_link and store_url:
         tail.append(f'{line_prefix(cfg)}<a href="{esc_attr(store_url)}">Страница в Steam</a>')
     question = engagement_html(cfg, kind)
@@ -376,8 +414,7 @@ def news_post_text(
     with_slot: bool = True,
 ) -> str:
     full_blob = f"{title} {summary}"
-    is_studio = any(re.search(pat, full_blob, re.I) for pat in _STUDIO_PATTERNS)
-    badge = "🏢 <b>Студии & Индустрия</b>\n" if is_studio else ""
+    badge = rubric_line(cfg, hotness.RUBRIC_LABELS.get(hotness.rubric(title, summary) or ""))
     title_line = f"{badge}{_prefix(cfg, title_emoji(cfg, 'news', title))}<b>{esc(title)}</b>"
     tail = []
     if cfg.show_source_link and link:
